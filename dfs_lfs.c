@@ -10,10 +10,12 @@
 #include <string.h>
 
 #if defined(RT_VERSION_CHECK) && (RTTHREAD_VERSION >= RT_VERSION_CHECK(5, 0, 2))
-#define DFS_LFS_RETURN_TYPE ssize_t
+#define DFS_LFS_RW_RETURN_TYPE  ssize_t
+#define DFS_LFS_LSK_RETURN_TYPE off_t
 #define DFS_LFS_MKFS(dev_id, fs_name) _dfs_lfs_mkfs(dev_id, fs_name)
 #else
-#define DFS_LFS_RETURN_TYPE int
+#define DFS_LFS_RW_RETURN_TYPE  int
+#define DFS_LFS_LSK_RETURN_TYPE int
 #define DFS_LFS_MKFS(dev_id, fs_name) _dfs_lfs_mkfs(dev_id)
 #endif
 
@@ -721,7 +723,7 @@ static int _dfs_lfs_ioctl(struct dfs_file* file, int cmd, void* args)
     return -ENOSYS;
 }
 
-static DFS_LFS_RETURN_TYPE _dfs_lfs_read(struct dfs_file* file, void* buf, size_t len)
+static DFS_LFS_RW_RETURN_TYPE _dfs_lfs_read(struct dfs_file* file, void* buf, size_t len)
 {
     lfs_ssize_t ssize;
     dfs_lfs_fd_t* dfs_lfs_fd;
@@ -760,7 +762,7 @@ static DFS_LFS_RETURN_TYPE _dfs_lfs_read(struct dfs_file* file, void* buf, size_
 }
 
 #ifndef LFS_READONLY
-static DFS_LFS_RETURN_TYPE _dfs_lfs_write(struct dfs_file* file, const void* buf, size_t len)
+static DFS_LFS_RW_RETURN_TYPE _dfs_lfs_write(struct dfs_file* file, const void* buf, size_t len)
 {
     lfs_ssize_t ssize;
     dfs_lfs_fd_t* dfs_lfs_fd;
@@ -820,7 +822,7 @@ static int _dfs_lfs_flush(struct dfs_file* file)
     return _lfs_result_to_dfs(result);
 }
 
-static DFS_LFS_RETURN_TYPE _dfs_lfs_lseek(struct dfs_file* file, rt_off_t offset)
+static DFS_LFS_LSK_RETURN_TYPE _dfs_lfs_lseek(struct dfs_file* file, rt_off_t offset)
 {
     dfs_lfs_fd_t* dfs_lfs_fd;
 
