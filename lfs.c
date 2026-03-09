@@ -3245,10 +3245,12 @@ static int lfs_file_open_(lfs_t *lfs, lfs_file_t *file,
 #endif
 
 static int lfs_file_close_(lfs_t *lfs, lfs_file_t *file) {
-#ifndef LFS_READONLY
-    int err = lfs_file_sync_(lfs, file);
-#else
     int err = 0;
+#ifndef LFS_READONLY
+    // it's not safe to do anything if our file errored
+    if (!(file->flags & LFS_F_ERRED)) {
+        err = lfs_file_sync_(lfs, file);
+    }
 #endif
 
     // remove from list of mdirs
@@ -3430,17 +3432,11 @@ relocate:
 
 #ifndef LFS_READONLY
 static int lfs_file_sync_(lfs_t *lfs, lfs_file_t *file) {
-    if (file->flags & LFS_F_ERRED) {
-        // it's not safe to do anything if our file errored
-        return 0;
-    }
-
     int err = lfs_file_flush(lfs, file);
     if (err) {
         file->flags |= LFS_F_ERRED;
         return err;
     }
-
 
     if ((file->flags & LFS_F_DIRTY) &&
             !lfs_pair_isnull(file->m.pair)) {
@@ -3486,6 +3482,17 @@ static int lfs_file_sync_(lfs_t *lfs, lfs_file_t *file) {
         file->flags &= ~LFS_F_DIRTY;
     }
 
+    // mark any other file handles as dirty + desync
+    for (lfs_file_t *f = (lfs_file_t*)lfs->mlist; f; f = f->next) {
+        if (file != f
+                && f->type == LFS_TYPE_REG
+                && lfs_pair_cmp(f->m.pair, file->m.pair) == 0
+                && f->id == file->id) {
+            f->flags |= LFS_F_DUSTY;
+        }
+    }
+
+    file->flags &= ~LFS_F_ERRED & ~LFS_F_DUSTY;
     return 0;
 }
 #endif
@@ -3693,7 +3700,7 @@ static lfs_ssize_t lfs_file_write_(lfs_t *lfs, lfs_file_t *file,
         return nsize;
     }
 
-    file->flags &= ~LFS_F_ERRED;
+    file->flags &= ~LFS_F_ERRED & ~LFS_F_DUSTY;
     return nsize;
 }
 #endif
@@ -4772,7 +4779,8 @@ int lfs_fs_traverse_(lfs_t *lfs,
             continue;
         }
 
-        if ((f->flags & LFS_F_DIRTY) && !(f->flags & LFS_F_INLINE)) {
+        if (((f->flags & LFS_F_DIRTY) || (f->flags & LFS_F_DUSTY))
+                && !(f->flags & LFS_F_INLINE)) {
             int err = lfs_ctz_traverse(lfs, &f->cache, &lfs->rcache,
                     f->ctz.head, f->ctz.size, cb, data);
             if (err) {
